@@ -120,7 +120,7 @@ function extractText(article) {
     }
   }
 
-  return text.trim();
+  return text.replace(/\u200B/g, '').trim();
 }
 
 /**
@@ -255,6 +255,12 @@ async function buildThread() {
   }
   if (!focalArticle) focalArticle = articles[0];
 
+  // 3b. Extract posting date from the focal tweet's time element.
+  const focalDate = (() => {
+    const timeEl = focalArticle.querySelector('time');
+    return timeEl ? timeEl.getAttribute('datetime') : null;
+  })();
+
   // 4. Determine the thread author.
   const focalAuthor = extractHandle(focalArticle);
   if (!focalAuthor) {
@@ -352,6 +358,7 @@ async function buildThread() {
     ok: true,
     author: focalAuthor,
     tweetCount: tweets.length,
+    date: focalDate,
     text,
     ...(warning ? { warning } : {}),
   };

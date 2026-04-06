@@ -81,11 +81,13 @@ header {
   background: #1780c4;
 }
 
-#btn-copy:disabled {
+#btn-copy:disabled,
+#btn-save:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
+#btn-save,
 #btn-clear {
   background: #f0f0f0;
   color: #333;
@@ -98,6 +100,7 @@ header {
   white-space: nowrap;
 }
 
+#btn-save:hover,
 #btn-clear:hover {
   background: #e0e0e0;
 }

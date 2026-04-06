@@ -10,6 +10,7 @@
 const statusEl    = document.getElementById('status');
 const outputEl    = document.getElementById('output');
 const btnCopy     = document.getElementById('btn-copy');
+const btnSave     = document.getElementById('btn-save');
 const btnClear    = document.getElementById('btn-clear');
 const tweetCount  = document.getElementById('tweet-count');
 const errorBox    = document.getElementById('error-box');
@@ -133,11 +134,13 @@ async function runExtraction() {
   }
 
   // Success path.
-  const header = `Thread by @${result.author} · ${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}\n${tab.url}\n\n`;
+  const dateStr = result.date ? new Date(result.date).toISOString().slice(0, 10) : '';
+  const header = `Thread by @${result.author} · ${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}${dateStr ? ' · ' + dateStr : ''}\n${tab.url}\n\n`;
   outputEl.value = header + result.text;
   statusEl.textContent = `Thread by @${result.author} · ${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}`;
   tweetCount.textContent = `${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}`;
   btnCopy.disabled = false;
+  btnSave.disabled = false;
 
   if (result.warning) {
     errorBox.textContent = 'Warning: ' + result.warning;
@@ -154,8 +157,37 @@ btnClear.addEventListener('click', () => {
   errorBox.hidden = true;
   errorBox.textContent = '';
   btnCopy.disabled = true;
+  btnSave.disabled = true;
   tweetCount.textContent = '';
   statusEl.textContent = 'Cleared.';
+});
+
+// ── Save button ───────────────────────────────────────────────────────────────
+
+btnSave.addEventListener('click', async () => {
+  const text = outputEl.value;
+  if (!text) return;
+
+  // Build filename from author, date and status ID in the current tab URL.
+  let filename = 'thread.txt';
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const u = new URL(activeTab.url);
+    const parts = u.pathname.split('/').filter(Boolean); // [handle, 'status', id]
+    // Extract date from header line in the text: "... · YYYY-MM-DD\n"
+    const dateMatch = text.match(/·\s(\d{4}-\d{2}-\d{2})/);
+    const datePart = dateMatch ? `_${dateMatch[1]}` : '';
+    if (parts.length >= 3) filename = `${parts[0]}${datePart}_${parts[2]}.txt`;
+    else if (parts.length >= 1) filename = `${parts[0]}${datePart}_thread.txt`;
+  } catch {}
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 // ── Copy button ───────────────────────────────────────────────────────────────
