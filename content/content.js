@@ -175,6 +175,25 @@ function extractNumberMarker(text) {
  *
  * @returns {Promise<{ok: boolean, author?: string, tweetCount?: number, text?: string, warning?: string, error?: string}>}
  */
+/**
+ * Harvests any currently visible thread tweets into the accumulator map.
+ * Must be called while the tweets are still in the DOM.
+ *
+ * @param {string} focalAuthor
+ * @param {Map<string, {text: string, marker: object|null}>} acc  keyed by tweet ID
+ */
+function harvestVisible(focalAuthor, acc) {
+  const articles = document.querySelectorAll('article[data-testid="tweet"]');
+  for (const article of articles) {
+    if (extractHandle(article) !== focalAuthor) continue;
+    const id = extractTweetId(article);
+    if (!id || acc.has(id)) continue;
+    const text = extractText(article);
+    const marker = extractNumberMarker(text);
+    acc.set(id, { text, marker });
+  }
+}
+
 async function buildThread() {
   // 1. Verify we're on a /status/ page.
   const pathname = window.location.pathname;
@@ -184,7 +203,7 @@ async function buildThread() {
   }
   const focalId = statusMatch[1];
 
-  // 2. Wait for tweets to appear and stabilise.
+  // 2. Wait for initial tweets to appear and stabilise.
   let articles;
   try {
     articles = await waitForTweets(5000);
@@ -211,28 +230,54 @@ async function buildThread() {
     return { ok: false, error: 'Could not determine the thread author handle.' };
   }
 
-  // 5. Filter articles by matching author, deduplicate by tweet ID.
-  const seen = new Set();
-  const threadArticles = [];
-  for (const article of articles) {
-    const handle = extractHandle(article);
-    if (handle !== focalAuthor) continue;
-    const id = extractTweetId(article);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    threadArticles.push(article);
+  // 5. Scroll-and-harvest loop.
+  // We accumulate tweets into a Map (id → data) as they pass through the DOM.
+  // Each scroll step: harvest visible, scroll down, wait for new content, repeat.
+  const acc = new Map();
+  harvestVisible(focalAuthor, acc);
+
+  let lastSize = -1;
+  let stableRounds = 0;
+  const maxRounds = 40;       // safety cap (~40 × 600ms = 24s max)
+  const scrollWait = 600;     // ms to wait after each scroll for React to render
+
+  for (let round = 0; round < maxRounds; round++) {
+    // Check if we already have the full thread via xx/yy markers.
+    let knownTotal = null;
+    for (const { marker } of acc.values()) {
+      if (marker && marker.total > 1) { knownTotal = marker.total; break; }
+    }
+    if (knownTotal && acc.size >= knownTotal) break;
+
+    // Scroll down one viewport height.
+    window.scrollBy(0, window.innerHeight);
+
+    // Wait for React to render new tweets.
+    await new Promise(r => setTimeout(r, scrollWait));
+
+    // Harvest whatever is now in the DOM.
+    harvestVisible(focalAuthor, acc);
+
+    // Stop if count hasn't grown for 3 consecutive rounds (end of thread).
+    if (acc.size === lastSize) {
+      stableRounds++;
+      if (stableRounds >= 3) break;
+    } else {
+      stableRounds = 0;
+    }
+    lastSize = acc.size;
   }
 
-  if (threadArticles.length === 0) {
+  if (acc.size === 0) {
     return { ok: false, error: 'No tweets found for the thread author.' };
   }
 
-  // 6. Extract text and number markers from each tweet.
-  const tweets = threadArticles.map((article) => {
-    const text = extractText(article);
-    const marker = extractNumberMarker(text);
-    return { text, marker };
-  });
+  // 6. Sort accumulated tweets by xx/yy marker if available, otherwise keep insertion order.
+  let tweets = Array.from(acc.values());
+  const allMarkered = tweets.every(t => t.marker !== null);
+  if (allMarkered) {
+    tweets.sort((a, b) => a.marker.current - b.marker.current);
+  }
 
   // 7. Validate x/y markers.
   let warning = null;

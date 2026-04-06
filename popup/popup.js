@@ -112,7 +112,7 @@ async function runExtraction() {
   }
 
   // 5. Wait for the content script result, with a generous UI timeout.
-  const TIMEOUT_MS = 12000;
+  const TIMEOUT_MS = 35000;
   let result;
   try {
     result = await Promise.race([
@@ -190,7 +190,7 @@ btnReload.addEventListener('click', async () => {
   try {
     result = await Promise.race([
       messagePromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out.')), 12000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out.')), 35000)),
     ]);
   } catch (e) {
     showError(e.message);
