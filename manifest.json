@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "xthread",
+  "version": "1.0.0",
+  "description": "Extract X/Twitter threads into a single readable text",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

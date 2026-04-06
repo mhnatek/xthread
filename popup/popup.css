@@ -1,0 +1,122 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  width: 420px;
+  min-height: 80px;
+  margin: 0;
+  padding: 12px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: #111;
+  background: #fff;
+}
+
+header {
+  margin-bottom: 10px;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  color: #0f0f0f;
+}
+
+#status {
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 8px;
+  min-height: 16px;
+}
+
+#output {
+  width: 100%;
+  font-size: 13px;
+  font-family: "Cascadia Mono", "Fira Mono", "Consolas", "Menlo", monospace;
+  resize: vertical;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px;
+  line-height: 1.5;
+  color: #222;
+  background: #fafafa;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+#output:focus {
+  border-color: #1d9bf0;
+  background: #fff;
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+#btn-copy {
+  background: #1d9bf0;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+#btn-copy:hover:not(:disabled) {
+  background: #1a8cd8;
+}
+
+#btn-copy:active:not(:disabled) {
+  background: #1780c4;
+}
+
+#btn-copy:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#btn-reload,
+#btn-clear {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+#btn-reload:hover,
+#btn-clear:hover {
+  background: #e0e0e0;
+}
+
+#tweet-count {
+  font-size: 12px;
+  color: #666;
+}
+
+#error-box {
+  color: #c0392b;
+  background: #fff0f0;
+  border: 1px solid #ffcccc;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
