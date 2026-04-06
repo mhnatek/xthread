@@ -17,6 +17,11 @@ Vanilla JS Microsoft Edge browser extension (Manifest V3) that extracts X/Twitte
 - `data-testid` attributes are used exclusively for selectors — more stable than hashed class names.
 - "Show more" / "Mehr anzeigen" buttons are clicked automatically before harvesting each batch.
 - Zero Width Space (U+200B) is stripped from all extracted text.
+- `xx/yy` markers are scanned from both start and end of tweet text. All candidates are collected; preference order: matches `knownTotal` → end-of-text candidate → smallest total. This prevents false positives like `9/11` (date reference) overriding `5/7` (thread marker).
+- `knownTotal` is derived from already-accumulated tweets at each harvest step and passed to `extractNumberMarker`.
+- Each harvested tweet is `console.log`-ged to the x.com tab's DevTools console for debugging.
+- No early stop on `knownTotal` — scroll continues until DOM count stabilises, to catch follow-up tweets posted after the numbered series.
+- Off-thread author replies (replies to other people) are not filtered — X's DOM has no reliable stable selector to distinguish them. This is a known limitation.
 
 ## Conventions
 
@@ -25,6 +30,7 @@ Vanilla JS Microsoft Edge browser extension (Manifest V3) that extracts X/Twitte
 - All DOM selectors use `data-testid` attributes
 - The scroll loop hard limit is 40 rounds (~24s); popup timeout is 35s
 - Filename for saved files: `{author}_{date}_{statusId}.txt`
+- Do not attempt to filter off-thread replies via DOM heuristics — previous attempts were all unreliable and caused regressions
 
 ## Extension permissions
 

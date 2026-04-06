@@ -70,12 +70,16 @@ xthread/
 - Uses stable `data-testid` attributes to locate tweet elements
 - Quoted tweets (nested articles) are detected and skipped to avoid content bleed
 - Zero Width Space characters (U+200B) are stripped from output
+- `xx/yy` markers are scanned from both the start and end of tweet text
+- `knownTotal` is propagated across tweets during harvesting to avoid false positive markers (e.g. `9/11` in text about the 9/11 attacks when the thread is `x/7`)
+- Each harvested tweet is logged to the browser console (F12 on the x.com tab) for debugging
 
 ## Limitations
 
 - Only captures tweets visible during the scroll pass; very long threads (100+) may need the page to fully load before clicking
 - Protected/private accounts require you to be logged in
 - Relies on X.com DOM structure — may break if X changes their markup significantly
+- Off-thread replies by the author (replies to other people mid-thread) may be included since X's DOM has no reliable stable selector to distinguish them
 
 ## License
 
