@@ -102,25 +102,27 @@ function extractText(article) {
     text = walkNodes(tweetTextEl, quotedTweet);
   }
 
-  const attachments = article.querySelector('[data-testid="attachments"]');
-  if (attachments) {
-    const hasVideo =
-      attachments.querySelector('video') !== null ||
-      attachments.querySelector('[data-testid="videoPlayer"]') !== null ||
-      attachments.querySelector('[data-testid="videoComponent"]') !== null;
-    if (hasVideo) {
-      text += '\n[video]';
-    } else {
-      const hasImage =
-        attachments.querySelector('img') !== null ||
-        attachments.querySelector('[data-testid="tweetPhoto"]') !== null;
-      if (hasImage) {
-        text += '\n[image]';
-      }
-    }
+  const attachmentLines = [];
+
+  // Photos: each tweetPhoto div contains an <img>
+  for (const photoDiv of article.querySelectorAll('[data-testid="tweetPhoto"]')) {
+    const img = photoDiv.querySelector('img');
+    if (!img) continue;
+    const alt = img.getAttribute('alt') || '';
+    const src = img.getAttribute('src') || '';
+    attachmentLines.push(alt ? `${alt}\n${src}` : src);
   }
 
-  return text.replace(/\u200B/g, '').trim();
+  // Videos: each videoPlayer/videoComponent contains a <video> (src often blob; use poster if available)
+  for (const videoEl of article.querySelectorAll('[data-testid="videoPlayer"] video, [data-testid="videoComponent"] video, video')) {
+    const poster = videoEl.getAttribute('poster') || '';
+    const src = videoEl.getAttribute('src') || '';
+    const ref = poster || src;
+    attachmentLines.push(ref || '[video]');
+  }
+
+  const body = text.replace(/\u200B/g, '').trim();
+  return { body, attachments: attachmentLines };
 }
 
 /**
@@ -156,7 +158,7 @@ function walkNodes(node, skipNode) {
 }
 
 /**
- * Searches the first 50 characters of `text` for a "x/y" numbering marker
+ * Searches the first and last 50 characters of `text` for a "x/y" numbering marker
  * and returns { current, total } as integers, or null if not found.
  *
  * @param {string} text
@@ -205,13 +207,7 @@ function extractNumberMarker(text, knownTotal = null) {
  *
  * @returns {Promise<{ok: boolean, author?: string, tweetCount?: number, text?: string, warning?: string, error?: string}>}
  */
-/**
- * Harvests any currently visible thread tweets into the accumulator map.
- * Must be called while the tweets are still in the DOM.
- *
- * @param {string} focalAuthor
- * @param {Map<string, {text: string, marker: object|null}>} acc  keyed by tweet ID
- */
+
 /**
  * Clicks any visible "Show more" / "Mehr anzeigen" buttons inside thread articles
  * to expand truncated tweet text. Returns the number of buttons clicked.
@@ -227,22 +223,23 @@ function expandShowMore(focalAuthor, expandedIds) {
     if (extractHandle(article) !== focalAuthor) continue;
     const id = extractTweetId(article);
     if (!id || expandedIds.has(id)) continue;
-    // X renders the button as a div/span with role="button" inside tweetText,
-    // or as a standalone element after tweetText. Match by text content.
-    const candidates = article.querySelectorAll('[role="button"], button');
-    for (const btn of candidates) {
-      const label = btn.textContent.trim().toLowerCase();
-      if (label === 'show more' || label === 'mehr anzeigen' || label === 'show more…' || label === 'mehr anzeigen…') {
-        btn.click();
-        expandedIds.add(id);
-        clicked++;
-        break;
-      }
+    const btn = article.querySelector('[data-testid="tweet-text-show-more-link"]');
+    if (btn) {
+      btn.click();
+      expandedIds.add(id);
+      clicked++;
     }
   }
   return clicked;
 }
 
+/**
+ * Harvests any currently visible thread tweets into the accumulator map.
+ * Must be called while the tweets are still in the DOM.
+ *
+ * @param {string} focalAuthor
+ * @param {Map<string, {text: string, marker: object|null}>} acc  keyed by tweet ID
+ */
 function harvestVisible(focalAuthor, acc) {
   let knownTotal = null;
   for (const { marker } of acc.values()) {
@@ -254,15 +251,23 @@ function harvestVisible(focalAuthor, acc) {
     if (extractHandle(article) !== focalAuthor) continue;
     const id = extractTweetId(article);
     if (!id || acc.has(id)) continue;
-    const text = extractText(article);
-    const marker = extractNumberMarker(text, knownTotal);
+    const { body, attachments } = extractText(article);
+    const marker = extractNumberMarker(body, knownTotal);
     if (marker && !knownTotal) knownTotal = marker.total;
+    const cleanBody = marker
+      ? body
+          .replace(/^\s*\d{1,3}\s*\/\s*\d{1,3}\s*/, '')
+          .replace(/\s*\d{1,3}\s*\/\s*\d{1,3}\s*$/, '')
+          .trim()
+      : body;
+    const text = attachments.length > 0 ? cleanBody + '\n\n' + attachments.join('\n') : cleanBody;
     acc.set(id, { id, text, marker });
     console.log(`[xthread] harvested id:${id} marker:${marker ? marker.current + '/' + marker.total : 'none'} text:${text.slice(0, 60).replace(/\n/g, ' ')}`);
   }
 }
 
 async function buildThread() {
+  
   // 1. Verify we're on a /status/ page.
   const pathname = window.location.pathname;
   const statusMatch = pathname.match(/\/status\/(\d+)/);
@@ -377,10 +382,7 @@ async function buildThread() {
   // 8. Build output string — use author's xx/yy marker as label, stripped from text body.
   const parts = tweets.map((tweet) => {
     if (!tweet.marker) return tweet.text;
-    const cleaned = tweet.text
-      .replace(/^\s*\d{1,3}\s*\/\s*\d{1,3}\s*/, '')
-      .replace(/\s*\d{1,3}\s*\/\s*\d{1,3}\s*$/, '');
-    return `[${tweet.marker.current}/${tweet.marker.total}]\n${cleaned}`;
+    return `[${tweet.marker.current}/${tweet.marker.total}]\n${tweet.text}`;
   });
 
   const text = parts.join('\n\n');
