@@ -182,6 +182,37 @@ function extractNumberMarker(text) {
  * @param {string} focalAuthor
  * @param {Map<string, {text: string, marker: object|null}>} acc  keyed by tweet ID
  */
+/**
+ * Clicks any visible "Show more" / "Mehr anzeigen" buttons inside thread articles
+ * to expand truncated tweet text. Returns the number of buttons clicked.
+ *
+ * @param {string} focalAuthor
+ * @param {Set<string>} expandedIds  tweet IDs already expanded, to avoid re-clicking
+ * @returns {number}
+ */
+function expandShowMore(focalAuthor, expandedIds) {
+  const articles = document.querySelectorAll('article[data-testid="tweet"]');
+  let clicked = 0;
+  for (const article of articles) {
+    if (extractHandle(article) !== focalAuthor) continue;
+    const id = extractTweetId(article);
+    if (!id || expandedIds.has(id)) continue;
+    // X renders the button as a div/span with role="button" inside tweetText,
+    // or as a standalone element after tweetText. Match by text content.
+    const candidates = article.querySelectorAll('[role="button"], button');
+    for (const btn of candidates) {
+      const label = btn.textContent.trim().toLowerCase();
+      if (label === 'show more' || label === 'mehr anzeigen' || label === 'show more…' || label === 'mehr anzeigen…') {
+        btn.click();
+        expandedIds.add(id);
+        clicked++;
+        break;
+      }
+    }
+  }
+  return clicked;
+}
+
 function harvestVisible(focalAuthor, acc) {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   for (const article of articles) {
@@ -232,8 +263,12 @@ async function buildThread() {
 
   // 5. Scroll-and-harvest loop.
   // We accumulate tweets into a Map (id → data) as they pass through the DOM.
-  // Each scroll step: harvest visible, scroll down, wait for new content, repeat.
+  // Each scroll step: expand truncated tweets, harvest, scroll, wait, repeat.
   const acc = new Map();
+  const expandedIds = new Set();
+
+  expandShowMore(focalAuthor, expandedIds);
+  await new Promise(r => setTimeout(r, 400));
   harvestVisible(focalAuthor, acc);
 
   let lastSize = -1;
@@ -254,6 +289,10 @@ async function buildThread() {
 
     // Wait for React to render new tweets.
     await new Promise(r => setTimeout(r, scrollWait));
+
+    // Expand any truncated tweets now in view, wait briefly if any were clicked.
+    const clicked = expandShowMore(focalAuthor, expandedIds);
+    if (clicked > 0) await new Promise(r => setTimeout(r, 400));
 
     // Harvest whatever is now in the DOM.
     harvestVisible(focalAuthor, acc);
@@ -299,10 +338,12 @@ async function buildThread() {
     }
   }
 
-  // 8. Build output string — use author's xx/yy marker if present, omit label otherwise.
+  // 8. Build output string — use author's xx/yy marker as label, stripped from text body.
   const parts = tweets.map((tweet) => {
-    const label = tweet.marker ? `[${tweet.marker.current}/${tweet.marker.total}]\n` : '';
-    return `${label}${tweet.text}`;
+    if (!tweet.marker) return tweet.text;
+    // Remove the original "x/y" marker from the start of the text to avoid duplication.
+    const cleaned = tweet.text.replace(/^\s*\d{1,3}\s*\/\s*\d{1,3}\s*/, '');
+    return `[${tweet.marker.current}/${tweet.marker.total}]\n${cleaned}`;
   });
 
   const text = parts.join('\n\n');
