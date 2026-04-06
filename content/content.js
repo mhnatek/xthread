@@ -162,12 +162,42 @@ function walkNodes(node, skipNode) {
  * @param {string} text
  * @returns {{ current: number, total: number } | null}
  */
-function extractNumberMarker(text) {
-  const sample = text.slice(0, 50);
-  const re = /(?:^|\s)(\d{1,3})\s*\/\s*(\d{1,3})(?:\s|[.,!?]|$)/;
-  const match = re.exec(sample);
-  if (!match) return null;
-  return { current: parseInt(match[1], 10), total: parseInt(match[2], 10) };
+function extractNumberMarker(text, knownTotal = null) {
+  const re = /(?:^|\s)(\d{1,3})\s*\/\s*(\d{1,3})(?:\s|[.,!?]|$)/g;
+  const candidates = [];
+  for (const sample of [text.slice(0, 50), text.slice(-50)]) {
+    re.lastIndex = 0;
+    let match;
+    while ((match = re.exec(sample)) !== null) {
+      const current = parseInt(match[1], 10);
+      const total = parseInt(match[2], 10);
+      if (current >= 1 && current <= total && total > 1 && total <= 99) {
+        candidates.push({ current, total });
+      }
+    }
+  }
+  if (candidates.length === 0) return null;
+  // Prefer a candidate matching the known thread total.
+  if (knownTotal) {
+    const exact = candidates.find(m => m.total === knownTotal);
+    if (exact) return exact;
+  }
+  // Otherwise prefer the end-of-text candidate (more likely to be the marker),
+  // falling back to smallest total.
+  const fromEnd = (() => {
+    const sample = text.slice(-50);
+    re.lastIndex = 0;
+    const match = re.exec(sample);
+    if (match) {
+      const current = parseInt(match[1], 10);
+      const total = parseInt(match[2], 10);
+      if (current >= 1 && current <= total && total > 1 && total <= 99) return { current, total };
+    }
+    return null;
+  })();
+  if (fromEnd) return fromEnd;
+  candidates.sort((a, b) => a.total - b.total);
+  return candidates[0];
 }
 
 /**
@@ -214,14 +244,21 @@ function expandShowMore(focalAuthor, expandedIds) {
 }
 
 function harvestVisible(focalAuthor, acc) {
+  let knownTotal = null;
+  for (const { marker } of acc.values()) {
+    if (marker && marker.total > 1) { knownTotal = marker.total; break; }
+  }
+
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   for (const article of articles) {
     if (extractHandle(article) !== focalAuthor) continue;
     const id = extractTweetId(article);
     if (!id || acc.has(id)) continue;
     const text = extractText(article);
-    const marker = extractNumberMarker(text);
-    acc.set(id, { text, marker });
+    const marker = extractNumberMarker(text, knownTotal);
+    if (marker && !knownTotal) knownTotal = marker.total;
+    acc.set(id, { id, text, marker });
+    console.log(`[xthread] harvested id:${id} marker:${marker ? marker.current + '/' + marker.total : 'none'} text:${text.slice(0, 60).replace(/\n/g, ' ')}`);
   }
 }
 
@@ -283,13 +320,6 @@ async function buildThread() {
   const scrollWait = 600;     // ms to wait after each scroll for React to render
 
   for (let round = 0; round < maxRounds; round++) {
-    // Check if we already have the full thread via xx/yy markers.
-    let knownTotal = null;
-    for (const { marker } of acc.values()) {
-      if (marker && marker.total > 1) { knownTotal = marker.total; break; }
-    }
-    if (knownTotal && acc.size >= knownTotal) break;
-
     // Scroll down one viewport height.
     window.scrollBy(0, window.innerHeight);
 
@@ -347,8 +377,9 @@ async function buildThread() {
   // 8. Build output string — use author's xx/yy marker as label, stripped from text body.
   const parts = tweets.map((tweet) => {
     if (!tweet.marker) return tweet.text;
-    // Remove the original "x/y" marker from the start of the text to avoid duplication.
-    const cleaned = tweet.text.replace(/^\s*\d{1,3}\s*\/\s*\d{1,3}\s*/, '');
+    const cleaned = tweet.text
+      .replace(/^\s*\d{1,3}\s*\/\s*\d{1,3}\s*/, '')
+      .replace(/\s*\d{1,3}\s*\/\s*\d{1,3}\s*$/, '');
     return `[${tweet.marker.current}/${tweet.marker.total}]\n${cleaned}`;
   });
 
