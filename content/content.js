@@ -121,6 +121,18 @@ function extractText(article) {
     attachmentLines.push(ref || '[video]');
   }
 
+  // Link cards: card.wrapper has card.layoutSmall.media (with <a>) and card.layoutSmall.detail (text) as siblings
+  for (const card of article.querySelectorAll('[data-testid="card.wrapper"]')) {
+    const link = card.querySelector('[data-testid="card.layoutSmall.media"] a[href], a[href]');
+    const href = link ? link.getAttribute('href') : '';
+    if (!href) continue;
+    const detail = card.querySelector('[data-testid="card.layoutSmall.detail"]');
+    const texts = detail
+      ? [...detail.querySelectorAll('div')].map(d => d.textContent.trim()).filter(Boolean)
+      : [];
+    attachmentLines.push(texts.length > 0 ? `${texts.join('\n')}\n${href}` : href);
+  }
+
   const body = text.replace(/\u200B/g, '').trim();
   return { body, attachments: attachmentLines };
 }
@@ -260,7 +272,8 @@ function harvestVisible(focalAuthor, acc) {
           .replace(/\s*\d{1,3}\s*\/\s*\d{1,3}\s*$/, '')
           .trim()
       : body;
-    const text = attachments.length > 0 ? cleanBody + '\n\n' + attachments.join('\n') : cleanBody;
+    const indented = attachments.map(a => a.split('\n').map(l => '    ' + l).join('\n'));
+    const text = indented.length > 0 ? cleanBody + '\n\n' + indented.join('\n\n') : cleanBody;
     acc.set(id, { id, text, marker });
     console.log(`[xthread] harvested id:${id} marker:${marker ? marker.current + '/' + marker.total : 'none'} text:${text.slice(0, 60).replace(/\n/g, ' ')}`);
   }
