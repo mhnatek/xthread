@@ -299,15 +299,13 @@ async function buildThread() {
     }
   }
 
-  // 8. Build output string.
-  const parts = tweets.map((tweet, idx) => {
-    const label = tweet.marker
-      ? `[${tweet.marker.current}/${tweet.marker.total}]`
-      : `[${idx + 1}/${tweets.length}]`;
-    return `${label}\n${tweet.text}`;
+  // 8. Build output string — use author's xx/yy marker if present, omit label otherwise.
+  const parts = tweets.map((tweet) => {
+    const label = tweet.marker ? `[${tweet.marker.current}/${tweet.marker.total}]\n` : '';
+    return `${label}${tweet.text}`;
   });
 
-  const text = parts.join('\n\n---\n\n');
+  const text = parts.join('\n\n');
 
   return {
     ok: true,

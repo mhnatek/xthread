@@ -10,7 +10,6 @@
 const statusEl    = document.getElementById('status');
 const outputEl    = document.getElementById('output');
 const btnCopy     = document.getElementById('btn-copy');
-const btnReload   = document.getElementById('btn-reload');
 const btnClear    = document.getElementById('btn-clear');
 const tweetCount  = document.getElementById('tweet-count');
 const errorBox    = document.getElementById('error-box');
@@ -134,7 +133,8 @@ async function runExtraction() {
   }
 
   // Success path.
-  outputEl.value = result.text;
+  const header = `Thread by @${result.author} · ${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}\n${tab.url}\n\n`;
+  outputEl.value = header + result.text;
   statusEl.textContent = `Thread by @${result.author} · ${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}`;
   tweetCount.textContent = `${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''}`;
   btnCopy.disabled = false;
@@ -146,72 +146,6 @@ async function runExtraction() {
 }
 
 document.addEventListener('DOMContentLoaded', runExtraction);
-
-// ── Reload button ─────────────────────────────────────────────────────────────
-
-btnReload.addEventListener('click', async () => {
-  errorBox.hidden = true;
-  errorBox.textContent = '';
-  const previous = outputEl.value.trim();
-  statusEl.textContent = 'Extracting…';
-
-  let tab;
-  try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    tab = activeTab;
-  } catch (e) {
-    showError('Could not access the active tab: ' + e.message);
-    return;
-  }
-
-  if (!tab || !isThreadUrl(tab.url)) {
-    showError('Navigate to an X/Twitter thread first.');
-    return;
-  }
-
-  const messagePromise = new Promise((resolve) => {
-    function onMessage(message) {
-      if (message && message.type === 'THREAD_RESULT') {
-        chrome.runtime.onMessage.removeListener(onMessage);
-        resolve(message.payload);
-      }
-    }
-    chrome.runtime.onMessage.addListener(onMessage);
-  });
-
-  try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/content.js'] });
-  } catch (e) {
-    showError('Could not inject script: ' + e.message);
-    return;
-  }
-
-  let result;
-  try {
-    result = await Promise.race([
-      messagePromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out.')), 35000)),
-    ]);
-  } catch (e) {
-    showError(e.message);
-    return;
-  }
-
-  if (!result || !result.ok) {
-    showError((result && result.error) || 'Unknown extraction error.');
-    return;
-  }
-
-  // Append new text to existing output.
-  outputEl.value = previous ? previous + '\n\n---\n\n' + result.text : result.text;
-  statusEl.textContent = `Thread by @${result.author} · ${result.tweetCount} tweet${result.tweetCount !== 1 ? 's' : ''} (added)`;
-  btnCopy.disabled = false;
-
-  if (result.warning) {
-    errorBox.textContent = 'Warning: ' + result.warning;
-    errorBox.hidden = false;
-  }
-});
 
 // ── Clear button ──────────────────────────────────────────────────────────────
 

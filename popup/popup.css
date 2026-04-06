@@ -86,7 +86,6 @@ header {
   cursor: not-allowed;
 }
 
-#btn-reload,
 #btn-clear {
   background: #f0f0f0;
   color: #333;
@@ -99,7 +98,6 @@ header {
   white-space: nowrap;
 }
 
-#btn-reload:hover,
 #btn-clear:hover {
   background: #e0e0e0;
 }
